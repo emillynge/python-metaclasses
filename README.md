@@ -28,4 +28,8 @@ class MyClass(metaclass=SingleDispatchMetaClass):
 ```
 An overloaded method will only be called if all annotated arguments passes: isinstance(arg, annotation).
 Arguments with no annotation are "wild cards", i.e they will match any input.
+Arguments are matched from left to right.
 If no methods matches the function signatures the first method declared in the class body will be called.
+
+### Inheritance
+If a baseclass 

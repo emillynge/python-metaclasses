@@ -104,7 +104,8 @@ class SingleDispatchMetaClass(type):
         new_clsdict.update(clsdict.non_funcs)
 
         for func_name, func_tree in clsdict.items():
-            inherited_funcs = [getattr(base, func_name) for base in bases if hasattr(base, func_name)]
+            inherited_funcs = [getattr(base, func_name) for base in bases if hasattr(base, func_name) and
+                               issubclass(base.__class__, mcs)]
             func_trees = [func_tree]
 
             for func in inherited_funcs:

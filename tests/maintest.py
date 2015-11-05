@@ -17,7 +17,13 @@ class AuxSingleDispatch2(AuxSingleDispatch):
     def inherited_func(self, arg: float):
         return 'float'
 
-class TestSingleDispatch(AuxSingleDispatch2):
+
+class AuxSingleDispatch3:
+    def inherited_func(self, arg: Dummy):
+        return 'Dummy'
+
+
+class TestSingleDispatch(AuxSingleDispatch2, AuxSingleDispatch3):
     def myfunc2(self, first: Dummy, second:Dummy):
         return 'default'
 
@@ -68,3 +74,6 @@ class TestSingleDispatch(AuxSingleDispatch2):
 
     def test_reach_inherited_deep(self):
         assert self.inherited_func((2.2,)) == 'tuple'
+
+    def test_do_not_reach_inherited(self):
+        assert self.inherited_func(Dummy()) != 'Dummy'
