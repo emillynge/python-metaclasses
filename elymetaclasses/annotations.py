@@ -3,8 +3,10 @@ from collections import UserDict, OrderedDict, Sequence, deque
 import inspect
 from functools import wraps
 
+
 class NoValidAnnotation(TypeError):
     pass
+
 
 class SingleDispatchMethodTree(UserDict):
     def __init__(self, default=None, **kwargs):
@@ -53,6 +55,9 @@ class SingleDispatchMethodTree(UserDict):
             return super().__getitem__(inspect._empty)[args]
         raise NoValidAnnotation()
 
+def get_annotations(func):
+    sig = inspect.signature(func)
+    return tuple(param.annotation for par_name, param in sig.parameters.items())
 
 class SingleDispatchClassDict(UserDict):
     def __init__(self):
@@ -64,22 +69,27 @@ class SingleDispatchClassDict(UserDict):
             if func_name not in self:
                 super().__setitem__(func_name, SingleDispatchMethodTree(default=func))  # first declaration. set default
 
-            sig = inspect.signature(func)
-            ann_sig = tuple(param.annotation for par_name, param in sig.parameters.items())
-            self[func_name][ann_sig] = func
+            self[func_name][get_annotations(func)] = func
         else:
             self.non_funcs[func_name] = func
 
 
-def single_dispatch_func(func_tree):
-    @wraps(func_tree.default)
+def single_dispatch_func(func_trees):
+    default_func = func_trees[0].default
+
+    @wraps(default_func)
     def wrapped_func(*args, **kwargs):
-        try:
-            func = func_tree[args]
-        except NoValidAnnotation:
-            func = func_tree.default
+        for func_tree in func_trees:
+            try:
+                func = func_tree[args]
+                break
+            except NoValidAnnotation:
+                pass
+        else:
+            func = default_func
         return func(*args, **kwargs)
-    setattr(wrapped_func, 'func_tree', func_tree)
+
+    setattr(wrapped_func, 'func_tree', func_trees)
     return wrapped_func
 
 
@@ -94,12 +104,24 @@ class SingleDispatchMetaClass(type):
         new_clsdict.update(clsdict.non_funcs)
 
         for func_name, func_tree in clsdict.items():
+            inherited_funcs = [getattr(base, func_name) for base in bases if hasattr(base, func_name)]
+            func_trees = [func_tree]
+
+            for func in inherited_funcs:
+                if hasattr(func, 'func_tree'):
+                    func_trees.extend(func.func_tree)
+                    continue
+                _func_tree = SingleDispatchMethodTree()
+                _func_tree[get_annotations(func)] = func
+
+                func_trees.append(_func_tree)
+
             # First method to be declared is considered the default method
-            if func_tree.count == 1:
+            if len(func_trees) == 1 and func_tree.count == 1:
                 new_clsdict[func_name] = func_tree.default
                 continue
 
-            new_clsdict[func_name] = single_dispatch_func(func_tree)
+            new_clsdict[func_name] = single_dispatch_func(func_trees)
 
 
         clsobj = super().__new__(mcs, clsname, bases, new_clsdict)
