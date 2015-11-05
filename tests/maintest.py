@@ -7,7 +7,11 @@ class Dummy(object):
 class Dummy2(object):
     pass
 
-class TestSingleDispatch(metaclass=SingleDispatchMetaClass):
+class AuxSingleDispatch(metaclass=SingleDispatchMetaClass):
+    def inherited_func(self, arg: float):
+        return 'float'
+
+class TestSingleDispatch(AuxSingleDispatch):
     def myfunc2(self, first: Dummy, second:Dummy):
         return 'default'
 
@@ -43,3 +47,15 @@ class TestSingleDispatch(metaclass=SingleDispatchMetaClass):
 
     def test_static(self):
         assert self.mystaticfunc(1, 'hi') == ('int', 'empty')
+
+    def inherited_func(self, arg: int):
+        return 'default'
+
+    def inherited_func(self, arg: str):
+        return 'str'
+
+    def test_default_inherited(self):
+        assert self.inherited_func(Dummy2()) == 'default'
+
+    def test_reach_inherited(self):
+        assert self.inherited_func(2.2) == 'float'

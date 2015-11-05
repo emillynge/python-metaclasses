@@ -50,13 +50,7 @@ class SingleDispatchMethodTree(UserDict):
 
 
         if inspect._empty in self.data:
-            try:
-                return super().__getitem__(inspect._empty)[args]
-            except NoValidAnnotation:
-                pass
-
-        if self.default:
-            return self.default
+            return super().__getitem__(inspect._empty)[args]
         raise NoValidAnnotation()
 
 
@@ -80,9 +74,12 @@ class SingleDispatchClassDict(UserDict):
 def single_dispatch_func(func_tree):
     @wraps(func_tree.default)
     def wrapped_func(*args, **kwargs):
-        func = func_tree[args]
+        try:
+            func = func_tree[args]
+        except NoValidAnnotation:
+            func = func_tree.default
         return func(*args, **kwargs)
-
+    setattr(wrapped_func, 'func_tree', func_tree)
     return wrapped_func
 
 
@@ -92,7 +89,9 @@ class SingleDispatchMetaClass(type):
         return SingleDispatchClassDict()
 
     def __new__(mcs, clsname, bases, clsdict):
-        new_clsdict = clsdict.non_funcs
+
+        new_clsdict = dict()
+        new_clsdict.update(clsdict.non_funcs)
 
         for func_name, func_tree in clsdict.items():
             # First method to be declared is considered the default method
