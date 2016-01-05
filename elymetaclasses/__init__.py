@@ -1,5 +1,5 @@
 __author__ = 'emil'
 
-from .annotations import SingleDispatchMetaClass
+from .annotations import (SingleDispatchMetaClass, TypeAssertMetaClass)
 
-all = ['SingleDispatchMetaClass']
+all = ['SingleDispatchMetaClass', 'TypeAssertMetaClass']

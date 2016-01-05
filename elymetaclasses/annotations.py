@@ -127,3 +127,32 @@ class SingleDispatchMetaClass(type):
 
         clsobj = super().__new__(mcs, clsname, bases, new_clsdict)
         return clsobj
+
+
+def type_assert(func, annotations):
+
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        for arg, ann in zip(args, annotations):
+            if ann != inspect._empty:
+                assert isinstance(arg, ann)
+        return func(*args, *kwargs)
+    return wrapped
+
+
+class TypeAssertMetaClass(type):
+    def __new__(mcs, clsname, bases, clsdict):
+        new_clsdict = dict(clsdict)
+        for func_name, func in clsdict.items():
+            if not inspect.isfunction(func):
+                continue
+            ann = get_annotations(func)
+            if all([an == inspect._empty for an in ann]):
+                new_clsdict[func_name] = func
+            else:
+                new_clsdict[func_name] = type_assert(func, ann)
+
+        clsobj = super().__new__(mcs, clsname, bases, new_clsdict)
+        return clsobj
+
+

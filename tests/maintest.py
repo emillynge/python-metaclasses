@@ -1,5 +1,5 @@
 __author__ = 'emil'
-from elymetaclasses import SingleDispatchMetaClass
+from elymetaclasses import *
 
 class Dummy(object):
     pass
@@ -77,3 +77,42 @@ class TestSingleDispatch(AuxSingleDispatch2, AuxSingleDispatch3):
 
     def test_do_not_reach_inherited(self):
         assert self.inherited_func(Dummy()) != 'Dummy'
+
+
+class FailAssert:
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not exc_type:
+            raise AssertionError('Should have failed')
+
+        if exc_type != AssertionError:
+            raise exc_type(exc_val)
+
+        return True
+
+
+class TestTypeAssert(metaclass=TypeAssertMetaClass):
+    def myfunc(self, first:int):
+        return "success"
+
+    def myfunc2(self, first):
+        return "success"
+
+    def myfunc3(self, first, second: int):
+        return "success"
+
+    def test_simple(self):
+        assert self.myfunc(1) == 'success'
+        with FailAssert():
+            self.myfunc(1.5)
+
+
+    def test_no_check(self):
+        assert self.myfunc2(Dummy()) == 'success'
+
+    def test_check_second(self):
+        assert self.myfunc3(Dummy(), 1) == 'success'
+        with FailAssert():
+            self.myfunc3(Dummy(), None)
