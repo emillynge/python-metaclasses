@@ -8,16 +8,17 @@ class NoValidAnnotation(TypeError):
     pass
 
 
-class SingleDispatchMethodTree(UserDict):
-    def __init__(self, default=None, **kwargs):
+class SingleDispatchMethodTree(OrderedDict):
+    def __init__(self, default=None, fun_type='method', **kwargs):
         self.func = None
+        self.fun_type = fun_type
         self.default = default
         super().__init__(**kwargs)
 
     @property
     def count(self):
         count = 0
-        for val in self.data.values():
+        for val in self.values():
             count += val.count
 
         if self.func:
@@ -28,7 +29,7 @@ class SingleDispatchMethodTree(UserDict):
         if annotations:                                 # Still more annotations to put into tree
             annotations = deque(annotations)
             annotation = annotations.popleft()          # take leftmost annotation out
-            item = self.data.get(annotation, self.__class__())
+            item = self.get(annotation, self.__class__())
             item[annotations] = func                    # assign remaining annotations to new dict with func
             super().__setitem__(annotation, item)
 
@@ -36,22 +37,21 @@ class SingleDispatchMethodTree(UserDict):
             self.func = func
 
     def __getitem__(self, args: Sequence):
-        if not args:
+        if args:
+            args = deque(args)
+            arg = args.popleft()
+
+            for annotation, sub_dict in self.items():
+                try:
+                    if isinstance(arg, annotation):
+                        return sub_dict[args]
+                except NoValidAnnotation:
+                    print('hi')
+                    pass
+        elif self.func is not None:
             return self.func
 
-        args = deque(args)
-        arg = args.popleft()
-
-        for annotation, sub_dict in self.data.items():
-            try:
-                if isinstance(arg, annotation):
-                    return sub_dict[args]
-            except NoValidAnnotation:
-                print('hi')
-                pass
-
-
-        if inspect._empty in self.data:
+        if inspect._empty in self:
             return super().__getitem__(inspect._empty)[args]
         raise NoValidAnnotation()
 
@@ -59,23 +59,40 @@ def get_annotations(func):
     sig = inspect.signature(func)
     return tuple(param.annotation for par_name, param in sig.parameters.items())
 
+
 class SingleDispatchClassDict(UserDict):
     def __init__(self):
         self.non_funcs = dict()
         super().__init__()
 
     def __setitem__(self, func_name, func):
-        if inspect.isfunction(func):
-            if func_name not in self:
-                super().__setitem__(func_name, SingleDispatchMethodTree(default=func))  # first declaration. set default
+        fun_type = None
+        if isinstance(func, staticmethod):
+            fun_type = 'static'
+            annotations = get_annotations(func.__func__)
+            func = func.__func__
 
-            self[func_name][get_annotations(func)] = func
+        elif isinstance(func, classmethod):
+            fun_type = 'class'
+            annotations = get_annotations(func.__func__)
+            func = func.__func__
+
+        elif inspect.isfunction(func):
+            fun_type = 'standard'
+            annotations = get_annotations(func)
+
+        if fun_type:
+            if func_name not in self:
+                super().__setitem__(func_name, SingleDispatchMethodTree(default=func, fun_type=fun_type))  # first declaration. set default
+
+            self[func_name][annotations] = func
         else:
             self.non_funcs[func_name] = func
 
 
 def single_dispatch_func(func_trees):
     default_func = func_trees[0].default
+    fun_type = func_trees[0].fun_type
 
     @wraps(default_func)
     def wrapped_func(*args, **kwargs):
@@ -87,7 +104,12 @@ def single_dispatch_func(func_trees):
                 pass
         else:
             func = default_func
+
         return func(*args, **kwargs)
+    if fun_type == 'static':
+        wrapped_func = staticmethod(wrapped_func)
+    elif fun_type == 'class':
+        wrapped_func = classmethod(wrapped_func)
 
     setattr(wrapped_func, 'func_tree', func_trees)
     return wrapped_func
