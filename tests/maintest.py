@@ -138,3 +138,55 @@ class TestTypeAssert(metaclass=TypeAssertMetaClass):
         assert self.myfunc3(Dummy(), 1) == 'success'
         with FailAssert():
             self.myfunc3(Dummy(), None)
+
+
+class AuxHooked0:
+    pass
+
+
+class AuxHooked1(HookedBase):
+    subclasshooks = ['goose', 'typing']
+    subclassregs = [AuxHooked0, list]
+
+
+class AuxHooked2:
+    def goose(self):
+        pass
+
+
+class AuxHooked3(AuxHooked2):
+    def typing(self):
+        pass
+
+
+class AuxHooked4(list):
+    pass
+
+
+class AuxHooked5(AuxHooked1):
+    subclasshooks = ['anothergoose']
+    subclassregs = [int]
+
+
+class AuxHooked6(AuxHooked3):
+    def anothergoose(self):
+        pass
+
+
+class TestHooked:
+    def test_regs(self):
+        assert isinstance(AuxHooked0(), AuxHooked1)
+        assert isinstance(AuxHooked4(), AuxHooked1)
+
+    def test_goosetype(self):
+        assert not isinstance(AuxHooked2(), AuxHooked1)
+        assert isinstance(AuxHooked3(), AuxHooked1)
+
+    def test_notinstance(self):
+        assert not isinstance(str, AuxHooked1)
+
+    def test_inheritance(self):
+        assert not isinstance(AuxHooked3(), AuxHooked5)
+        assert isinstance(AuxHooked6(), AuxHooked5)
+
+        assert isinstance(AuxHooked4(), AuxHooked5)
