@@ -6,7 +6,7 @@ if sys.version_info < (3, 4):
 
 setup(
     name='elymetaclasses',
-    version='1.5',
+    version='1.6',
     packages=['elymetaclasses', 'elymetaclasses.abc'],
     url='https://github.com/emillynge/python-metaclasses',
     license='GPL v2',
