@@ -1,6 +1,4 @@
 __author__ = 'emil'
-import sys
-print(sys.path)
 from elymetaclasses import *
 from elymetaclasses.utils import FailAssert
 
