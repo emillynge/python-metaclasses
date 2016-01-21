@@ -1,5 +1,8 @@
 __author__ = 'emil'
+import sys
+print(sys.path)
 from elymetaclasses import *
+from elymetaclasses.utils import FailAssert
 
 class Dummy(object):
     pass
@@ -102,18 +105,7 @@ class TestSingledispatch:
     def test_classmethod_default(self):
         assert self.sd.myclassmethod('hej', 1) == self.sd.__class__.__name__
 
-class FailAssert:
-    def __enter__(self):
-        pass
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if not exc_type:
-            raise AssertionError('Should have failed')
-
-        if exc_type != AssertionError:
-            raise exc_type(exc_val)
-
-        return True
 
 
 class TestTypeAssert(metaclass=TypeAssertMetaClass):
