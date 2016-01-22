@@ -20,6 +20,10 @@ class Chained(ChainedProps):
         changes['test3'] += 1
         return self.test + hej
 
+class SuperChained(Chained):
+    @property
+    def test(self):
+        return super().test + 'super'
 
 class TestChained:
     opt1 = Options.make(hej='foo', med='bar')
@@ -49,5 +53,15 @@ class TestChained:
         self.opt1.med = 'far'
         assert chained.test3 == 'boofarboo'
 
+    def test_super(self):
+        chained = SuperChained(self.opt1)
+        changes['test'] = 0
+        self.opt1.hej = 'foo'
+        self.opt1.med = 'bar'
 
+        # super get works
+        assert chained.test == 'foobarsuper'
 
+        # super depend works
+        self.opt1.hej = 'boo'
+        assert chained.test == 'boobarsuper'
