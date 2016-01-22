@@ -1,8 +1,9 @@
 from collections import (namedtuple, OrderedDict, defaultdict, UserDict)
 import inspect
-from functools import (lru_cache, partial)
+from functools import (lru_cache, partial, wraps)
 from .utils import Options
-from typing import List
+from itertools import chain
+from typing import List, Sequence, Union
 
 GlobalFuncName = namedtuple('GlobalFuncName', 'cls_name func_name')
 setattr(GlobalFuncName, '__repr__',
@@ -53,6 +54,18 @@ class DependencyDict(UserDict):
         return super().__getitem__(dependency.cls_name)[dependency.func_name]
 
 
+def args_from_opt(*non_opt_args: Sequence):
+    """A decorator indicating a method which should take some or all of its
+    input from self.opt: Options
+
+    Requires that the metaclass is ChainedPropsMetaClass or derived from it.
+    """
+    def tagger(funcobj):
+        funcobj.__args_from_opt__ = non_opt_args
+        return funcobj
+    return tagger
+
+
 class _ChainedProps:
     _dependencies = DependencyDict(
         '_ChainedProps')  # <- Overwritten by metaclass!
@@ -85,6 +98,7 @@ class _ChainedProps:
             delete_q.update(dependencies[del_fun])
             self._property_cache.pop(del_fun)
 
+
 class ChainedPropsMetaClass(type):
     """
     class that relies on a single Options dict provided at init for all property
@@ -112,6 +126,16 @@ class ChainedPropsMetaClass(type):
                 new_del = partial(mcs.deleter, func_name_global)
                 new_clsdict[func_name_local] = property(fget=new_get,
                                                         fdel=new_del)
+            elif hasattr(func, '__args_from_opt__'):
+                if isinstance(func, (classmethod, staticmethod)):
+                    raise IllegalConstruction('args_from_opts requires an '
+                                              'instance to get opts from '
+                                              'this cis incompatible with '
+                                              'class- and staticmethods')
+                non_opt_args = func.__args_from_opt__
+                wrapper = mcs.args_from_opt(non_opt_args)
+                new_clsdict[func_name_local] = wrapper(func)
+
             else:
                 new_clsdict[func_name_local] = func
 
@@ -153,7 +177,8 @@ class ChainedPropsMetaClass(type):
     @staticmethod
     def _fetch_opts(instance: _ChainedProps,
                     parameters: List[inspect.Parameter],
-                    func_name):
+                    callback_func_name=None, ignore: Sequence[str]=tuple()):
+
         kwargs = OrderedDict()
         args = list()
         for param in parameters:
@@ -168,36 +193,70 @@ class ChainedPropsMetaClass(type):
             elif param.default is inspect._empty:
                 if name in instance.opt:
                     args.append(instance.opt[name])
-                else:
+                elif name not in ignore:
                     raise ValueError(
                             'parameter "{}" used but is not specified in opts'.format(
                                     name))
+                else:
+                     args.append(None)
 
             # default present. input out own if present
             elif name in instance.opt:
                 kwargs[name] = instance.opt[name]
 
-            instance.opt.set_callback(name,
-                                      instance.options_callback(func_name))
+            if callback_func_name:
+                instance.opt.set_callback(name,
+                                      instance.options_callback(callback_func_name))
 
         return args, kwargs
 
-    """
-    def _get_constructors(self, constructor_names):
-        for constructor in constructor_names:
-            yield getattr(self, constructor)
+    @classmethod
+    def args_from_opt(mcs, non_opt_args: Sequence):
+        def wrapper(func):
+            params = list(inspect.signature(func).parameters.values())
+            params.pop(0)
+            ignore = tuple()
 
-    def construct(self, constructors):
-        prev = None
-        for constructor in self._get_constructors(constructors):
-            kwargs = self._fetch_opts(constructor, prev=prev)
-            try:
-                prev = constructor(**kwargs)
-            except Exception as e:
-                raise ValueError('Exception during construction of {!r}'.format(constructor)) from e
-        return prev
-    """
+            if len(non_opt_args) == 1 and isinstance(non_opt_args[0], int):
+                params = params[non_opt_args[0]:]
 
+                def mergeargs(args, optargs):
+                    return chain(args, optargs)
+
+            elif non_opt_args:
+                param_names = list(param.name for param in params)
+                idx = [-1] + [param_names.index(param) for param in non_opt_args] + [None]
+
+                slices = [slice(i + 1,j) for i,j in zip(idx[:-1], idx[1:])]
+                def yielder(args, optargs):
+                    for opt_slice, arg in zip((optargs[s] for s in slices), args):
+                        yield opt_slice
+                        yield (arg,)
+
+                    yield optargs[slices[-1]]
+
+                def mergeargs(args, optargs):
+                    return chain(*yielder(args, optargs))
+
+                ignore = tuple(params[i].name for i in idx[1:-1])
+
+            else:
+                # No thrills wrapper
+                @wraps(func)
+                def wrapfun(instance):
+                    optargs, optkwargs = mcs._fetch_opts(instance, params)
+                    return func(instance, *optargs, **optkwargs)
+                return wrapfun
+
+            # more complex wrapper
+            @wraps(func)
+            def wrapfun(instance, *args, **kwargs):
+                optargs, optkwargs = mcs._fetch_opts(instance, params,
+                                                     ignore=ignore)
+                optkwargs.update(kwargs)
+                return func(instance, *mergeargs(args, optargs), **optkwargs)
+            return wrapfun
+        return wrapper
 
 class ChainedProps(_ChainedProps, metaclass=ChainedPropsMetaClass):
     pass

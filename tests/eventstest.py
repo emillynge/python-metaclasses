@@ -1,5 +1,6 @@
 from elymetaclasses.utils import FailAssert, Options
-from elymetaclasses.events import ChainedProps, IllegalConstruction, GlobalFuncName
+from elymetaclasses.events import ChainedProps, IllegalConstruction, GlobalFuncName, args_from_opt
+import abc
 from collections import defaultdict
 
 changes = defaultdict(int)
@@ -20,10 +21,31 @@ class Chained(ChainedProps):
         changes['test3'] += 1
         return self.test + hej
 
+    @args_from_opt(1)
+    def intmethod(self, dynarg, hej, med='me'):
+        return dynarg + hej + med
+
+    @args_from_opt('dynarg')
+    def firstmethod(self, dynarg, hej, med='me'):
+        return dynarg + hej + med
+
+    @args_from_opt('hej')
+    def secondmethod(self, dynarg, hej, med='me'):
+        return dynarg + hej + med
+
+    @args_from_opt(0)
+    def kwargmethod(self, dynarg, hej, med='me'):
+        return dynarg + hej + med
+
+    @args_from_opt()
+    def nothrill(self, dynarg, hej, med='me'):
+        return dynarg + hej + med
+
 class SuperChained(Chained):
     @property
     def test(self):
         return super().test + 'super'
+
 
 class FailChained(ChainedProps):
     @property
@@ -94,3 +116,37 @@ class TestChained:
             f2 = GlobalFuncName('SuperChained', 'test')
             # try to set f2 as a dependency of f1
             chained._dependencies[f2] = f1
+
+        with FailAssert(IllegalConstruction):
+            class Failer(ChainedProps):
+                @args_from_opt()
+                @staticmethod
+                def failer():
+                    pass
+
+        with FailAssert(IllegalConstruction):
+            class Failer(ChainedProps):
+                @args_from_opt()
+                @classmethod
+                def failer(cls):
+                    pass
+
+
+
+    def test_args_from_opts_decorator(self):
+        chained = Chained(self.opt1)
+        self.opt1.hej = 'foo'
+        self.opt1.med = 'bar'
+
+        assert chained.intmethod('hey') == 'heyfoobar'
+        assert chained.firstmethod('hey') == 'heyfoobar'
+        with FailAssert(ValueError):
+            assert chained.secondmethod('hey') == 'heyfoobar'
+
+        opt2 = self.opt1.copy()
+        opt2['dynarg'] = 'dyn'
+        chained = Chained(opt2)
+        assert chained.secondmethod('hey') == 'dynheybar'
+        assert chained.kwargmethod() == 'dynfoobar'
+        assert chained.kwargmethod(med='boo') == 'dynfooboo'
+        assert chained.nothrill() == 'dynfoobar'

@@ -21,7 +21,7 @@ class FailAssert:
             raise AssertionError('Should have failed')
 
         if exc_type not in self.fail_types:
-            raise exc_type(exc_val)
+            raise
 
         return True
 
