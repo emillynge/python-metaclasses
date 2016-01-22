@@ -22,11 +22,15 @@ class DependencyDict(UserDict):
 
     def add_base(self, base: object):
         if hasattr(base, '_dependencies'):
-            super().__setitem__(base.__name__,
-                                base._dependencies.get_func_dict())
+            for _base, _dependencies in base._dependencies.super_items():
+                super().__setitem__(_base, _dependencies)
 
     def get_func_dict(self):
         return super().__getitem__(self.clsname)
+
+    def super_items(self):
+        for base in self.keys():
+            yield base, super().__getitem__(base)
 
     def __setitem__(self, dependency: GlobalFuncName, function: GlobalFuncName):
         """
