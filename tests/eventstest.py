@@ -1,5 +1,5 @@
 from elymetaclasses.utils import FailAssert, Options
-from elymetaclasses.events import ChainedProps
+from elymetaclasses.events import ChainedProps, IllegalConstruction, GlobalFuncName
 from collections import defaultdict
 
 changes = defaultdict(int)
@@ -24,6 +24,15 @@ class SuperChained(Chained):
     @property
     def test(self):
         return super().test + 'super'
+
+class FailChained(ChainedProps):
+    @property
+    def kwarg_fun(self, **wrong):
+        return False
+
+    @property
+    def missing_params(self, nothere):
+        return False
 
 class TestChained:
     opt1 = Options.make(hej='foo', med='bar')
@@ -53,6 +62,12 @@ class TestChained:
         self.opt1.med = 'far'
         assert chained.test3 == 'boofarboo'
 
+        # test direct deletion
+        changes['test'] = 0
+        del chained.test
+        chained.test
+        assert changes['test'] == 1
+
     def test_super(self):
         chained = SuperChained(self.opt1)
         changes['test'] = 0
@@ -65,3 +80,17 @@ class TestChained:
         # super depend works
         self.opt1.hej = 'boo'
         assert chained.test == 'boobarsuper'
+
+    def test_fail(self):
+        with FailAssert(IllegalConstruction):
+            FailChained(self.opt1).kwarg_fun
+
+        with FailAssert(ValueError):
+            FailChained(self.opt1).missing_params
+
+        with FailAssert(KeyError):
+            chained = Chained(self.opt1)
+            f1 = GlobalFuncName('Chained', 'test')
+            f2 = GlobalFuncName('SuperChained', 'test')
+            # try to set f2 as a dependency of f1
+            chained._dependencies[f2] = f1

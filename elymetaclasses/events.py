@@ -9,6 +9,10 @@ setattr(GlobalFuncName, '__repr__',
         lambda self: self.cls_name + '.' + self.func_name)
 
 
+class IllegalConstruction(SyntaxError):
+    pass
+
+
 class DependencyDict(UserDict):
     def __init__(self, clsname):
         self.clsname = clsname
@@ -31,7 +35,7 @@ class DependencyDict(UserDict):
         :return:
         """
         try:
-            super().__setitem__(dependency, function)
+            self.__getitem__(dependency).add(function)
 
         except KeyError:
             raise KeyError(
@@ -157,9 +161,8 @@ class ChainedPropsMetaClass(type):
 
             # check if **kwargs
             if param.kind.name == 'VAR_KEYWORD':
-                raise ValueError(
+                raise IllegalConstruction(
                         'Do not have **kwargs input types chained property'.format())
-
 
             # if no default
             elif param.default is inspect._empty:
