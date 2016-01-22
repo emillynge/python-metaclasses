@@ -151,6 +151,15 @@ class SingleDispatchMetaClass(type):
         return clsobj
 
 
+class SingleDispatch(metaclass=SingleDispatchMetaClass):
+    pass
+
+class LastResort:
+    """
+    Will match no annotations
+    """
+    pass
+
 def type_assert(func, annotations):
 
     @wraps(func)
