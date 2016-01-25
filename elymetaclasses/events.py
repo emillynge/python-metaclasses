@@ -111,6 +111,7 @@ class ChainedPropsMetaClass(type):
     """
 
     def __new__(mcs, clsname, bases, clsdict):
+        debug_flags = clsdict.get('debug', tuple())
         new_clsdict = dict()
         dependencies = DependencyDict(clsname)
         for base in bases:
@@ -120,6 +121,10 @@ class ChainedPropsMetaClass(type):
 
         for func_name_local, func in clsdict.items():
             if isinstance(func, property):
+                if 'nocache' in debug_flags:
+                    new_clsdict[func_name_local] = func.getter(mcs.args_from_opt(tuple())(func.fget))
+                    continue
+
                 func_name_global = GlobalFuncName(clsname, func_name_local)
                 getter = func.fget
                 params = list(inspect.signature(getter).parameters.values())
@@ -128,8 +133,16 @@ class ChainedPropsMetaClass(type):
                                   params, func_name_global)
 
                 new_del = partial(mcs.deleter, func_name_global)
+                if func.fset is None:
+                    fset = partial(mcs.basic_setter, func_name_global)
+                else:
+                    fset = partial(mcs.wrapping_setter, func_name_global,
+                                   func.fset)
+
+
                 new_clsdict[func_name_local] = property(fget=new_get,
-                                                        fdel=new_del)
+                                                        fdel=new_del,
+                                                        fset=fset)
             elif hasattr(func, '__args_from_opt__'):
                 if isinstance(func, (classmethod, staticmethod)):
                     raise IllegalConstruction('args_from_opts requires an '
@@ -149,6 +162,19 @@ class ChainedPropsMetaClass(type):
     @staticmethod
     def deleter(func_descriptor: GlobalFuncName, instance: _ChainedProps):
         instance._prop_cache_delete(func_descriptor)
+
+    @staticmethod
+    def wrapping_setter(func_descriptor: GlobalFuncName, fset,
+                        instance: _ChainedProps, prop):
+        prop = fset(instance, prop)
+        instance._prop_cache_delete(func_descriptor)
+        instance._property_cache[func_descriptor] = prop
+
+    @staticmethod
+    def basic_setter(func_descriptor: GlobalFuncName,
+                     instance: _ChainedProps, prop):
+        instance._prop_cache_delete(func_descriptor)
+        instance._property_cache[func_descriptor] = prop
 
     # noinspection PyProtectedMember
     def getter(self, wrapped, params, func_descriptor: GlobalFuncName,
@@ -174,6 +200,7 @@ class ChainedPropsMetaClass(type):
             prop = wrapped(instance, *args, **kwargs)
         finally:
             instance._property_stack.remove(func_descriptor)
+
 
         instance._property_cache[func_descriptor] = prop
         return prop

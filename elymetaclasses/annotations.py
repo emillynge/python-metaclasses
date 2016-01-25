@@ -160,15 +160,19 @@ class LastResort:
     """
     pass
 
-def type_assert(func, annotations):
+def type_assert(*annotations):
+    if len(annotations) == 1 and isinstance(annotations[0], (list, tuple)):
+        annotations = annotations[0]
 
-    @wraps(func)
-    def wrapped(*args, **kwargs):
-        for arg, ann in zip(args, annotations):
-            if ann != inspect._empty:
-                assert isinstance(arg, ann)
-        return func(*args, *kwargs)
-    return wrapped
+    def wrapper(func):
+        @wraps(func)
+        def wrapped(*args, **kwargs):
+            for arg, ann in zip(args, annotations):
+                if ann != inspect._empty:
+                    assert isinstance(arg, ann)
+            return func(*args, *kwargs)
+        return wrapped
+    return wrapper
 
 
 class TypeAssertMetaClass(type):
@@ -181,7 +185,7 @@ class TypeAssertMetaClass(type):
             if all([an == inspect._empty for an in ann]):
                 new_clsdict[func_name] = func
             else:
-                new_clsdict[func_name] = type_assert(func, ann)
+                new_clsdict[func_name] = type_assert(ann)(func)
 
         clsobj = super().__new__(mcs, clsname, bases, new_clsdict)
         return clsobj

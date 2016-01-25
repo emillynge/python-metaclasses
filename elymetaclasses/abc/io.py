@@ -1,16 +1,21 @@
 from .base import HookedMetaClass
-from abc import abstractmethod
+from abc import abstractmethod, abstractproperty
 from collections.abc import *
 from io import TextIOBase as _TextIOBase
 from io import TextIOWrapper as _TextIOWrapper
 from io import StringIO as _StringIO
 from io import BytesIO as _BytesIO
+from typing import Union
 from _pyio import TextIOWrapper, TextIOBase, StringIO, BytesIO
 
 
 class IOBase(metaclass=HookedMetaClass):
     subclasshooks = ['close']
     subclassregs = [_TextIOBase, _TextIOWrapper, TextIOBase, TextIOWrapper, _StringIO, _BytesIO, StringIO, BytesIO]
+
+    @abstractproperty
+    def mode(self) -> str:
+        pass
 
     @abstractmethod
     def close(self):
@@ -21,7 +26,7 @@ class InputStream(IOBase):
     subclasshooks = ['read']
 
     @abstractmethod
-    def read(self, size=-1) -> Sequence:
+    def read(self, size=-1) -> Union[bytes, str, Sequence]:
         pass
 
 
@@ -43,6 +48,7 @@ class SeekableStream(IOBase):
     @abstractmethod
     def tell(self) -> int:
         pass
+
 
 class SeekableInputStream(InputStream, SeekableStream):
     pass
