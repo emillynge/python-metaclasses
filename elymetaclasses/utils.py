@@ -136,10 +136,10 @@ class Options(OrderedDict):
         :param kwargs:
         :return:
         """
-        class CustomOptions(cls):
+        class Options(cls):
             pass
         kwargs['_make_called'] = True
-        return CustomOptions(*args, **kwargs)
+        return Options(*args, **kwargs)
 
     def copy(self):
         return self.make(self.items())
